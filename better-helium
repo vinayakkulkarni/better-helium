@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+# better-helium — give Helium browser the DRM playback it ships without.
+#
+# Downloads Google's official Chrome.dmg, extracts the WidevineCdm bundle,
+# injects it into Helium.app, ad-hoc re-signs the bundle. Idempotent.
+# Re-run after every Helium update.
+#
+# Usage:
+#   ./better-helium              patch (download Widevine if not cached)
+#   ./better-helium --force      re-patch even if Helium already has Widevine
+#   ./better-helium --refresh    re-download Widevine from Chrome
+#   ./better-helium --uninstall  remove Widevine from Helium (revert)
+#
+# License: MIT — see LICENSE.
+# RCA: see RCA.md for the full story (Widevine L3, VMP signing, why Prime is SD).
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+readonly HELIUM_APP="/Applications/Helium.app"
+readonly CHROME_DMG_URL="https://dl.google.com/chrome/mac/universal/stable/GGRO/googlechrome.dmg"
+readonly CACHE_DIR="${HOME}/.cache/better-helium"
+readonly CDM_CACHE="${CACHE_DIR}/WidevineCdm"
+readonly CDM_VERSION_FILE="${CACHE_DIR}/version"
+
+# Colors (suppressed if not a TTY)
+if [[ -t 1 ]]; then
+    readonly RED=$'\033[31m' GREEN=$'\033[32m' YELLOW=$'\033[33m'
+    readonly BLUE=$'\033[34m' DIM=$'\033[2m' BOLD=$'\033[1m' RESET=$'\033[0m'
+else
+    readonly RED= GREEN= YELLOW= BLUE= DIM= BOLD= RESET=
+fi
+
+# ---------------------------------------------------------------------------
+# Output helpers
+# ---------------------------------------------------------------------------
+
+step()    { printf "%s→%s %s\n" "$BLUE" "$RESET" "$1"; }
+ok()      { printf "%s✓%s %s\n" "$GREEN" "$RESET" "$1"; }
+warn()    { printf "%s!%s %s\n" "$YELLOW" "$RESET" "$1"; }
+err()     { printf "%s✗%s %s\n" "$RED" "$RESET" "$1" >&2; exit 1; }
+dim()     { printf "%s%s%s\n" "$DIM" "$1" "$RESET"; }
+heading() { printf "\n%s%s%s\n" "$BOLD" "$1" "$RESET"; }
+
+# ---------------------------------------------------------------------------
+# Args
+# ---------------------------------------------------------------------------
+
+FORCE=0
+REFRESH=0
+UNINSTALL=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force)     FORCE=1 ;;
+        --refresh)   REFRESH=1 ;;
+        --uninstall) UNINSTALL=1 ;;
+        -h|--help)
+            sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0
+            ;;
+        *) err "Unknown flag: $1" ;;
+    esac
+    shift
+done
+
+# ---------------------------------------------------------------------------
+# Pre-flight
+# ---------------------------------------------------------------------------
+
+[[ "$(uname)" == "Darwin" ]] || err "macOS only."
+[[ -d "$HELIUM_APP" ]] || err "Helium not found at $HELIUM_APP. Install from https://helium.computer first."
+
+ARCH="$(uname -m)"
+case "$ARCH" in
+    arm64)  CDM_ARCH="mac_arm64" ;;
+    x86_64) CDM_ARCH="mac_x64" ;;
+    *)      err "Unsupported architecture: $ARCH" ;;
+esac
+
+# Detect Helium version
+HELIUM_VERSIONS_DIR="$HELIUM_APP/Contents/Frameworks/Helium Framework.framework/Versions"
+HELIUM_VER="$(ls -1 "$HELIUM_VERSIONS_DIR" 2>/dev/null | grep -E '^[0-9]+\.' | sort -Vr | head -1)"
+[[ -n "${HELIUM_VER:-}" ]] || err "Couldn't detect Helium version under $HELIUM_VERSIONS_DIR"
+
+HELIUM_LIBS="$HELIUM_VERSIONS_DIR/$HELIUM_VER/Libraries"
+HELIUM_WIDEVINE="$HELIUM_LIBS/WidevineCdm"
+
+heading "better-helium"
+dim    "  Helium:    $HELIUM_VER  ($ARCH → $CDM_ARCH)"
+
+# ---------------------------------------------------------------------------
+# Functions (defined before any control flow that uses them)
+# ---------------------------------------------------------------------------
+
+ensure_widevine_cached() {
+    if (( REFRESH )) || [[ ! -d "$CDM_CACHE" || ! -f "$CDM_CACHE/manifest.json" ]]; then
+        download_widevine
+    else
+        local cached_ver
+        cached_ver="$(grep -o '"version":[[:space:]]*"[^"]*"' "$CDM_CACHE/manifest.json" | sed 's/.*"\([^"]*\)".*/\1/')"
+        ok "Using cached WidevineCdm $cached_ver  ${DIM}($CDM_CACHE)${RESET}"
+    fi
+}
+
+download_widevine() {
+    step "Downloading Google Chrome (one-time, ~250 MB) to extract WidevineCdm..."
+    mkdir -p "$CACHE_DIR"
+    local dmg="$CACHE_DIR/googlechrome.dmg"
+
+    curl -fL --progress-bar "$CHROME_DMG_URL" -o "$dmg" || err "Download failed."
+
+    step "Mounting Chrome.dmg..."
+    local mount_output mount_point
+    mount_output="$(hdiutil attach -nobrowse -readonly "$dmg" 2>&1)"
+    mount_point="$(echo "$mount_output" | grep -E '^/dev/' | tail -1 | awk -F'\t' '{print $NF}')"
+    [[ -d "$mount_point" ]] || err "Couldn't mount Chrome.dmg (mount_point=$mount_point)"
+
+    step "Extracting WidevineCdm..."
+    local chrome_versions_dir="$mount_point/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions"
+    local chrome_ver
+    chrome_ver="$(ls -1 "$chrome_versions_dir" 2>/dev/null | grep -E '^[0-9]+\.' | sort -Vr | head -1)"
+    [[ -n "$chrome_ver" ]] || { hdiutil detach "$mount_point" >/dev/null 2>&1 || true; err "No Chrome version dir found inside DMG."; }
+
+    local source_cdm="$chrome_versions_dir/$chrome_ver/Libraries/WidevineCdm"
+    [[ -d "$source_cdm" ]] || { hdiutil detach "$mount_point" >/dev/null 2>&1 || true; err "WidevineCdm not found in Chrome.dmg — Google may have changed the layout."; }
+
+    rm -rf "$CDM_CACHE"
+    cp -R "$source_cdm" "$CDM_CACHE"
+
+    step "Unmounting Chrome.dmg..."
+    hdiutil detach "$mount_point" >/dev/null 2>&1 || true
+    rm -f "$dmg"
+
+    local widevine_ver
+    widevine_ver="$(grep -o '"version":[[:space:]]*"[^"]*"' "$CDM_CACHE/manifest.json" | sed 's/.*"\([^"]*\)".*/\1/')"
+    echo "$widevine_ver" > "$CDM_VERSION_FILE"
+    ok "Cached WidevineCdm $widevine_ver  ${DIM}(from Chrome $chrome_ver)${RESET}"
+}
+
+quit_helium() {
+    if pgrep -f "$HELIUM_APP" >/dev/null; then
+        step "Quitting Helium..."
+        osascript -e 'tell application "Helium" to quit' 2>/dev/null || true
+        local waited=0
+        while pgrep -f "$HELIUM_APP" >/dev/null && (( waited < 5 )); do
+            sleep 1
+            ((waited++))
+        done
+        pgrep -f "$HELIUM_APP" >/dev/null && err "Helium didn't quit. Close it manually and re-run."
+        ok "Helium quit."
+    fi
+}
+
+# Move a bundle in or out of /Applications via sudo (App Management TCC workaround).
+# Only the moves themselves need elevation — once in /tmp the bundle is freely writable.
+move_bundle() {
+    local from="$1" to="$2"
+    osascript >/dev/null 2>&1 <<EOF
+do shell script "rm -rf $(printf '%q' "$to") && mv $(printf '%q' "$from") $(printf '%q' "$to")" with administrator privileges
+EOF
+    [[ -d "$to" ]] || err "Move failed: $from → $to"
+}
+
+# ---------------------------------------------------------------------------
+# Uninstall path
+# ---------------------------------------------------------------------------
+
+if (( UNINSTALL )); then
+    [[ -d "$HELIUM_WIDEVINE" ]] || { warn "Nothing to uninstall — Helium has no WidevineCdm."; exit 0; }
+    heading "Uninstalling"
+    warn "macOS will prompt for your password — required by Apple's App Management protection."
+    quit_helium
+    TMP_APP="/tmp/Helium.app.uninstall.$$"
+    trap 'rm -rf "$TMP_APP" 2>/dev/null || true' EXIT
+    step "Moving bundle to /tmp..."
+    move_bundle "$HELIUM_APP" "$TMP_APP"
+    step "Removing WidevineCdm..."
+    rm -rf "$TMP_APP/Contents/Frameworks/Helium Framework.framework/Versions/$HELIUM_VER/Libraries/WidevineCdm"
+    step "Clearing xattrs + re-signing..."
+    xattr -cr "$TMP_APP"
+    codesign --force --deep -s - "$TMP_APP" >/dev/null 2>&1 || err "codesign failed."
+    step "Moving bundle back..."
+    move_bundle "$TMP_APP" "$HELIUM_APP"
+    trap - EXIT
+    ok "WidevineCdm removed. Helium re-signed."
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Main patch flow
+# ---------------------------------------------------------------------------
+
+if [[ -d "$HELIUM_WIDEVINE" && -f "$HELIUM_WIDEVINE/manifest.json" ]] && (( FORCE == 0 && REFRESH == 0 )); then
+    existing_ver="$(grep -o '"version":[[:space:]]*"[^"]*"' "$HELIUM_WIDEVINE/manifest.json" | sed 's/.*"\([^"]*\)".*/\1/')"
+    ok "Helium already patched with WidevineCdm $existing_ver."
+    dim "  Use --force to re-apply, --refresh to download a newer CDM first."
+    exit 0
+fi
+
+ensure_widevine_cached
+quit_helium
+
+heading "Patching Helium"
+warn "macOS will prompt for your password — required by Apple's App Management protection."
+
+TMP_APP="/tmp/Helium.app.better-helium.$$"
+trap 'rm -rf "$TMP_APP" 2>/dev/null || true' EXIT
+
+step "Moving bundle to /tmp (App Management TCC workaround)..."
+move_bundle "$HELIUM_APP" "$TMP_APP"
+
+step "Injecting WidevineCdm into Helium $HELIUM_VER..."
+TMP_LIBS="$TMP_APP/Contents/Frameworks/Helium Framework.framework/Versions/$HELIUM_VER/Libraries"
+rm -rf "$TMP_LIBS/WidevineCdm"
+cp -R "$CDM_CACHE" "$TMP_LIBS/WidevineCdm"
+
+step "Clearing extended attributes..."
+xattr -cr "$TMP_APP"
+
+step "Ad-hoc re-signing bundle (this takes 30–60 seconds)..."
+codesign --force --deep -s - "$TMP_APP" >/dev/null 2>&1 || err "codesign failed."
+
+step "Verifying signature..."
+codesign -v "$TMP_APP" 2>&1 || err "Signature verification failed."
+
+step "Moving bundle back to /Applications..."
+move_bundle "$TMP_APP" "$HELIUM_APP"
+trap - EXIT
+
+# ---------------------------------------------------------------------------
+# Done
+# ---------------------------------------------------------------------------
+
+WIDEVINE_VER="$(grep -o '"version":[[:space:]]*"[^"]*"' "$HELIUM_APP/Contents/Frameworks/Helium Framework.framework/Versions/$HELIUM_VER/Libraries/WidevineCdm/manifest.json" | sed 's/.*"\([^"]*\)".*/\1/')"
+
+cat <<EOF
+
+${GREEN}${BOLD}✓ Done.${RESET}
+
+  ${BOLD}Helium${RESET}    $HELIUM_VER
+  ${BOLD}Widevine${RESET}  $WIDEVINE_VER
+
+${BOLD}What works now${RESET}
+  ${GREEN}✓${RESET}  Netflix      up to 720p  ${DIM}(Widevine L3 cap)${RESET}
+  ${GREEN}✓${RESET}  Hotstar      up to 1080p
+  ${GREEN}✓${RESET}  YouTube      full quality
+  ${GREEN}✓${RESET}  Spotify web  full quality
+  ${GREEN}✓${RESET}  Disney+      up to 720p
+
+${BOLD}What still won't work${RESET}
+  ${YELLOW}✗${RESET}  Prime Video  SD only — Amazon's VMP signing check rejects Helium.
+                  Use Safari for HD Prime. See ${BOLD}RCA.md${RESET} for the gritty details.
+
+${DIM}Verify: open Helium → ${BOLD}helium://components${RESET}${DIM} → look for "Widevine Content Decryption Module".${RESET}
+${DIM}Re-run this script after every Helium update.${RESET}
+EOF
