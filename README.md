@@ -42,12 +42,40 @@ You **do not** need Google Chrome installed. The script downloads the DMG, extra
 
 ```sh
 ./better-helium             # Patch Helium. No-op if already patched.
+./better-helium --check     # Report status without changing anything.
 ./better-helium --force     # Re-patch even if Helium already has Widevine.
 ./better-helium --refresh   # Re-download Widevine from Chrome (get newer version).
 ./better-helium --uninstall # Remove Widevine from Helium, ad-hoc re-sign.
 ```
 
 When Helium auto-updates, just re-run `./better-helium`. The cached Widevine is reused — patch takes ~30 seconds.
+
+### `--check` for scripts and shell prompts
+
+`--check` is read-only and exits with a meaningful code:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Helium has WidevineCdm installed (patched) |
+| `1` | Helium present but unpatched |
+| `2` | Error (Helium not installed, unreadable, etc.) |
+
+Useful in `.zshrc` / Starship / Powerlevel10k:
+
+```sh
+# Show a shield in your prompt only when Helium is patched
+better-helium --check >/dev/null 2>&1 && echo "🛡️"
+```
+
+Or in a CI / health-check script:
+
+```sh
+if better-helium --check >/dev/null; then
+    echo "Helium DRM ready"
+else
+    better-helium  # auto-repair
+fi
+```
 
 ---
 

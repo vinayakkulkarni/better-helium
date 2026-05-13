@@ -7,6 +7,7 @@
 #
 # Usage:
 #   ./better-helium              patch (download Widevine if not cached)
+#   ./better-helium --check      report status without patching (exit 0=patched, 1=not, 2=error)
 #   ./better-helium --force      re-patch even if Helium already has Widevine
 #   ./better-helium --refresh    re-download Widevine from Chrome
 #   ./better-helium --uninstall  remove Widevine from Helium (revert)
@@ -41,7 +42,7 @@ fi
 step()    { printf "%s→%s %s\n" "$BLUE" "$RESET" "$1"; }
 ok()      { printf "%s✓%s %s\n" "$GREEN" "$RESET" "$1"; }
 warn()    { printf "%s!%s %s\n" "$YELLOW" "$RESET" "$1"; }
-err()     { printf "%s✗%s %s\n" "$RED" "$RESET" "$1" >&2; exit 1; }
+err()     { printf "%s✗%s %s\n" "$RED" "$RESET" "$1" >&2; exit 2; }
 dim()     { printf "%s%s%s\n" "$DIM" "$1" "$RESET"; }
 heading() { printf "\n%s%s%s\n" "$BOLD" "$1" "$RESET"; }
 
@@ -52,20 +53,27 @@ heading() { printf "\n%s%s%s\n" "$BOLD" "$1" "$RESET"; }
 FORCE=0
 REFRESH=0
 UNINSTALL=0
+CHECK=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --check)     CHECK=1 ;;
         --force)     FORCE=1 ;;
         --refresh)   REFRESH=1 ;;
         --uninstall) UNINSTALL=1 ;;
         -h|--help)
-            sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *) err "Unknown flag: $1" ;;
     esac
     shift
 done
+
+# --check is read-only and mutually exclusive with mutating flags
+if (( CHECK )) && (( FORCE || REFRESH || UNINSTALL )); then
+    err "--check cannot be combined with --force, --refresh, or --uninstall."
+fi
 
 # ---------------------------------------------------------------------------
 # Pre-flight
@@ -89,19 +97,25 @@ HELIUM_VER="$(ls -1 "$HELIUM_VERSIONS_DIR" 2>/dev/null | grep -E '^[0-9]+\.' | s
 HELIUM_LIBS="$HELIUM_VERSIONS_DIR/$HELIUM_VER/Libraries"
 HELIUM_WIDEVINE="$HELIUM_LIBS/WidevineCdm"
 
-heading "better-helium"
-dim    "  Helium:    $HELIUM_VER  ($ARCH → $CDM_ARCH)"
-
 # ---------------------------------------------------------------------------
 # Functions (defined before any control flow that uses them)
 # ---------------------------------------------------------------------------
+
+# Read "version" out of a Widevine manifest.json. Empty string if not parseable.
+manifest_version() {
+    local manifest="$1"
+    [[ -f "$manifest" ]] || { echo ""; return; }
+    grep -o '"version":[[:space:]]*"[^"]*"' "$manifest" 2>/dev/null \
+        | sed 's/.*"\([^"]*\)".*/\1/' \
+        | head -1
+}
 
 ensure_widevine_cached() {
     if (( REFRESH )) || [[ ! -d "$CDM_CACHE" || ! -f "$CDM_CACHE/manifest.json" ]]; then
         download_widevine
     else
         local cached_ver
-        cached_ver="$(grep -o '"version":[[:space:]]*"[^"]*"' "$CDM_CACHE/manifest.json" | sed 's/.*"\([^"]*\)".*/\1/')"
+        cached_ver="$(manifest_version "$CDM_CACHE/manifest.json")"
         ok "Using cached WidevineCdm $cached_ver  ${DIM}($CDM_CACHE)${RESET}"
     fi
 }
@@ -136,7 +150,7 @@ download_widevine() {
     rm -f "$dmg"
 
     local widevine_ver
-    widevine_ver="$(grep -o '"version":[[:space:]]*"[^"]*"' "$CDM_CACHE/manifest.json" | sed 's/.*"\([^"]*\)".*/\1/')"
+    widevine_ver="$(manifest_version "$CDM_CACHE/manifest.json")"
     echo "$widevine_ver" > "$CDM_VERSION_FILE"
     ok "Cached WidevineCdm $widevine_ver  ${DIM}(from Chrome $chrome_ver)${RESET}"
 }
@@ -164,6 +178,63 @@ do shell script "rm -rf $(printf '%q' "$to") && mv $(printf '%q' "$from") $(prin
 EOF
     [[ -d "$to" ]] || err "Move failed: $from → $to"
 }
+
+# ---------------------------------------------------------------------------
+# Banner (skipped in --check mode — that path prints its own header)
+# ---------------------------------------------------------------------------
+
+if (( CHECK == 0 )); then
+    heading "better-helium"
+    dim    "  Helium:    $HELIUM_VER  ($ARCH → $CDM_ARCH)"
+fi
+
+# ---------------------------------------------------------------------------
+# --check path — read-only status report
+# Exit codes: 0 patched, 1 not patched, 2 error (handled upstream by err())
+# ---------------------------------------------------------------------------
+
+if (( CHECK )); then
+    heading "better-helium status"
+    dim    "  Helium:    $HELIUM_VER  ($ARCH → $CDM_ARCH)"
+    printf "\n"
+
+    installed_ver="$(manifest_version "$HELIUM_WIDEVINE/manifest.json")"
+    cached_ver="$(manifest_version "$CDM_CACHE/manifest.json")"
+
+    if [[ -n "$installed_ver" ]]; then
+        ok "Widevine installed — $installed_ver"
+        dim "  ↳ $HELIUM_WIDEVINE"
+    elif [[ -d "$HELIUM_WIDEVINE" ]]; then
+        warn "Widevine directory exists but manifest unreadable — bundle may be corrupt."
+        dim "  ↳ Run \`./better-helium --force\` to repair."
+    else
+        warn "Widevine NOT installed — Helium ships without it."
+        dim "  ↳ Run \`./better-helium\` to patch."
+    fi
+
+    printf "\n"
+    if [[ -n "$cached_ver" ]]; then
+        dim "  Cache:     $cached_ver  ($CDM_CACHE)"
+        if [[ -n "$installed_ver" && "$cached_ver" != "$installed_ver" ]]; then
+            dim "             ${YELLOW}newer cached — run --force to upgrade${RESET}"
+        fi
+    else
+        dim "  Cache:     (empty — Chrome.dmg will be downloaded on first patch)"
+    fi
+
+    if codesign -v "$HELIUM_APP" >/dev/null 2>&1; then
+        dim "  Signature: valid"
+    else
+        warn "Signature: INVALID — Helium may refuse to launch. Re-run patch."
+    fi
+
+    printf "\n"
+    if [[ -n "$installed_ver" ]]; then
+        exit 0
+    else
+        exit 1
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 # Uninstall path
@@ -195,7 +266,7 @@ fi
 # ---------------------------------------------------------------------------
 
 if [[ -d "$HELIUM_WIDEVINE" && -f "$HELIUM_WIDEVINE/manifest.json" ]] && (( FORCE == 0 && REFRESH == 0 )); then
-    existing_ver="$(grep -o '"version":[[:space:]]*"[^"]*"' "$HELIUM_WIDEVINE/manifest.json" | sed 's/.*"\([^"]*\)".*/\1/')"
+    existing_ver="$(manifest_version "$HELIUM_WIDEVINE/manifest.json")"
     ok "Helium already patched with WidevineCdm $existing_ver."
     dim "  Use --force to re-apply, --refresh to download a newer CDM first."
     exit 0
@@ -235,7 +306,7 @@ trap - EXIT
 # Done
 # ---------------------------------------------------------------------------
 
-WIDEVINE_VER="$(grep -o '"version":[[:space:]]*"[^"]*"' "$HELIUM_APP/Contents/Frameworks/Helium Framework.framework/Versions/$HELIUM_VER/Libraries/WidevineCdm/manifest.json" | sed 's/.*"\([^"]*\)".*/\1/')"
+WIDEVINE_VER="$(manifest_version "$HELIUM_APP/Contents/Frameworks/Helium Framework.framework/Versions/$HELIUM_VER/Libraries/WidevineCdm/manifest.json")"
 
 cat <<EOF
 
