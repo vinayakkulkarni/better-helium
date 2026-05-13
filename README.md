@@ -2,8 +2,20 @@
 
 Give the [Helium browser](https://helium.computer) the DRM playback it ships without — Netflix, Hotstar, Disney+, Spotify, YouTube Premium DRM titles. One script. Idempotent. Re-run after every Helium update.
 
+### Homebrew (recommended)
+
 ```sh
-git clone https://github.com/vinayakkulkarni/better-helium.git
+brew tap vinayakkulkarni/better-helium git@github.com:vinayakkulkarni/better-helium.git
+brew install --HEAD better-helium
+better-helium
+```
+
+After install, `better-helium` is on your PATH. The first patch downloads Google Chrome.dmg (~250 MB, cached); subsequent patches take ~30 seconds.
+
+### Git clone (no brew)
+
+```sh
+git clone git@github.com:vinayakkulkarni/better-helium.git
 cd better-helium
 ./better-helium
 ```
@@ -60,20 +72,43 @@ When Helium auto-updates, just re-run `./better-helium`. The cached Widevine is 
 | `1` | Helium present but unpatched |
 | `2` | Error (Helium not installed, unreadable, etc.) |
 
-Useful in `.zshrc` / Starship / Powerlevel10k:
+Runtime: ~40 ms — fast enough to call on every prompt without caching.
+
+**Drop into `~/.zshrc`** (shield indicator in the right-prompt):
 
 ```sh
-# Show a shield in your prompt only when Helium is patched
-better-helium --check >/dev/null 2>&1 && echo "🛡️"
+if command -v better-helium >/dev/null 2>&1; then
+    _better_helium_indicator() {
+        better-helium --check >/dev/null 2>&1 && echo "%F{green}🛡%f " || true
+    }
+    RPROMPT='$(_better_helium_indicator)'"${RPROMPT-}"
+fi
 ```
 
-Or in a CI / health-check script:
+**Starship** (`~/.config/starship.toml`):
+
+```toml
+[custom.helium]
+command = "echo 🛡"
+when    = "better-helium --check"
+format  = "[$output](green) "
+```
+
+**Powerlevel10k** segment in `~/.p10k.zsh`:
+
+```sh
+function prompt_helium() {
+    better-helium --check >/dev/null 2>&1 && p10k segment -i '🛡' -f green
+}
+```
+
+**CI / health-check script**:
 
 ```sh
 if better-helium --check >/dev/null; then
     echo "Helium DRM ready"
 else
-    better-helium  # auto-repair
+    better-helium
 fi
 ```
 
