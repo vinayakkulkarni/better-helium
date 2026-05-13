@@ -74,32 +74,51 @@ When Helium auto-updates, just re-run `./better-helium`. The cached Widevine is 
 
 Runtime: ~40 ms — fast enough to call on every prompt without caching.
 
-**Drop into `~/.zshrc`** (shield indicator in the right-prompt):
+**Drop into `~/.zshrc`** — shield when patched, yellow nudge when not:
 
 ```sh
 if command -v better-helium >/dev/null 2>&1; then
     _better_helium_indicator() {
-        better-helium --check >/dev/null 2>&1 && echo "%F{green}🛡%f " || true
+        local rc
+        better-helium --check >/dev/null 2>&1
+        rc=$?
+        case $rc in
+            0) echo "%F{green}🛡%f " ;;
+            1) echo "%F{yellow}⚠ better-helium%f " ;;
+        esac
     }
     RPROMPT='$(_better_helium_indicator)'"${RPROMPT-}"
 fi
 ```
 
-**Starship** (`~/.config/starship.toml`):
-
-```toml
-[custom.helium]
-command = "echo 🛡"
-when    = "better-helium --check"
-format  = "[$output](green) "
-```
+After every Helium auto-update the shield disappears and `⚠ better-helium` appears — a passive alarm telling you exactly which command to run.
 
 **Powerlevel10k** segment in `~/.p10k.zsh`:
 
 ```sh
 function prompt_helium() {
-    better-helium --check >/dev/null 2>&1 && p10k segment -i '🛡' -f green
+    better-helium --check >/dev/null 2>&1
+    case $? in
+        0) p10k segment -i '🛡' -f green ;;
+        1) p10k segment -t 'better-helium' -i '⚠' -f yellow ;;
+    esac
 }
+```
+
+**Starship** (`~/.config/starship.toml`) — two segments, both auto-hide when Helium is missing:
+
+```toml
+[custom.helium_ok]
+command = "echo 🛡"
+when    = "better-helium --check"
+format  = "[$output](green) "
+shell   = ["sh", "-c"]
+
+[custom.helium_warn]
+command = "echo '⚠ better-helium'"
+when    = 'test "$(better-helium --check >/dev/null 2>&1; echo $?)" = 1'
+format  = "[$output](yellow) "
+shell   = ["sh", "-c"]
 ```
 
 **CI / health-check script**:
