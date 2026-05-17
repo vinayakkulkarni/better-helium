@@ -191,6 +191,17 @@ Removes `WidevineCdm` from the Helium bundle and re-signs. Helium goes back to i
 
 ---
 
+## Cutting a release (maintainer notes)
+
+```sh
+scripts/release.sh 1.0.1                  # bump + tag + push + release
+scripts/release.sh 1.0.1 --dry-run        # preview without changing anything
+scripts/release.sh 1.0.1 --notes-file notes.md   # custom notes (else gh auto-generates)
+scripts/release.sh 1.1.0-beta.1           # marked as --prerelease automatically
+```
+
+The script handles the full flow end-to-end: validates clean working tree + main branch + tag availability, bumps `VERSION` in the script, tags + pushes, retries the GitHub-generated tarball until ready, computes its sha256, updates the Homebrew formula's `url`/`sha256`/`version`, commits + pushes, and creates the GitHub release.
+
 ## Prior art
 
 - [vikas5914/helium-drm-fixer](https://github.com/vikas5914/helium-drm-fixer) — the original gist that documented the patch by hand.
