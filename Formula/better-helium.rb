@@ -3,14 +3,18 @@
 
 # Homebrew formula for better-helium.
 #
-# One-shot install (no tap needed):
+# Stable install (recommended — pinned to v1.0.0 tarball):
+#
+#   brew install https://raw.githubusercontent.com/vinayakkulkarni/better-helium/main/Formula/better-helium.rb
+#
+# Bleeding-edge install (always tracks main branch):
 #
 #   brew install --HEAD https://raw.githubusercontent.com/vinayakkulkarni/better-helium/main/Formula/better-helium.rb
 #
-# Tap-based install (cleaner upgrades — `brew upgrade --fetch-HEAD better-helium`):
+# Tap-based install (cleaner upgrades — `brew upgrade better-helium`):
 #
 #   brew tap vinayakkulkarni/better-helium https://github.com/vinayakkulkarni/better-helium
-#   brew install --HEAD better-helium
+#   brew install better-helium
 #
 # Once installed, the binary lives at $(brew --prefix)/bin/better-helium and is
 # reachable from any shell. Drop the .zshrc snippet from the project README
@@ -18,7 +22,10 @@
 class BetterHelium < Formula
   desc "Give Helium browser the DRM playback it ships without"
   homepage "https://github.com/vinayakkulkarni/better-helium"
+  url "https://github.com/vinayakkulkarni/better-helium/archive/refs/tags/v1.0.0.tar.gz"
+  sha256 "7e1f9757978bfc8329f9fb691bf891a4fb6ce38d292e4861aab70ae9a391e463"
   license "MIT"
+  version "1.0.0"
 
   head "https://github.com/vinayakkulkarni/better-helium.git", branch: "main"
 
@@ -49,6 +56,7 @@ class BetterHelium < Formula
   end
 
   test do
+    assert_match "better-helium 1.0.0", shell_output("#{bin}/better-helium --version")
     assert_match "better-helium", shell_output("#{bin}/better-helium --help")
     # --check returns 2 when not on macOS or Helium is missing.
     # In the test sandbox there's no Helium, so we accept exit 2.
