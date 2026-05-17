@@ -4,10 +4,18 @@ Give the [Helium browser](https://helium.computer) the DRM playback it ships wit
 
 ### Homebrew (recommended)
 
+One-shot install — no tap setup, just install from the formula URL:
+
 ```sh
-brew tap vinayakkulkarni/better-helium git@github.com:vinayakkulkarni/better-helium.git
-brew install --HEAD better-helium
+brew install --HEAD https://raw.githubusercontent.com/vinayakkulkarni/better-helium/main/Formula/better-helium.rb
 better-helium
+```
+
+Or tap it for managed upgrades (`brew upgrade --fetch-HEAD better-helium`):
+
+```sh
+brew tap vinayakkulkarni/better-helium https://github.com/vinayakkulkarni/better-helium
+brew install --HEAD better-helium
 ```
 
 After install, `better-helium` is on your PATH. The first patch downloads Google Chrome.dmg (~250 MB, cached); subsequent patches take ~30 seconds.
@@ -15,7 +23,7 @@ After install, `better-helium` is on your PATH. The first patch downloads Google
 ### Git clone (no brew)
 
 ```sh
-git clone git@github.com:vinayakkulkarni/better-helium.git
+git clone https://github.com/vinayakkulkarni/better-helium.git
 cd better-helium
 ./better-helium
 ```

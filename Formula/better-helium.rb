@@ -3,14 +3,14 @@
 
 # Homebrew formula for better-helium.
 #
-# Install (private repo — requires SSH auth to github.com:vinayakkulkarni):
+# One-shot install (no tap needed):
 #
-#   brew tap vinayakkulkarni/better-helium git@github.com:vinayakkulkarni/better-helium.git
+#   brew install --HEAD https://raw.githubusercontent.com/vinayakkulkarni/better-helium/main/Formula/better-helium.rb
+#
+# Tap-based install (cleaner upgrades — `brew upgrade --fetch-HEAD better-helium`):
+#
+#   brew tap vinayakkulkarni/better-helium https://github.com/vinayakkulkarni/better-helium
 #   brew install --HEAD better-helium
-#
-# Or, if the repo is later made public:
-#
-#   brew install vinayakkulkarni/better-helium/better-helium
 #
 # Once installed, the binary lives at $(brew --prefix)/bin/better-helium and is
 # reachable from any shell. Drop the .zshrc snippet from the project README
@@ -20,7 +20,7 @@ class BetterHelium < Formula
   homepage "https://github.com/vinayakkulkarni/better-helium"
   license "MIT"
 
-  head "git@github.com:vinayakkulkarni/better-helium.git", branch: "main", using: :git
+  head "https://github.com/vinayakkulkarni/better-helium.git", branch: "main"
 
   depends_on :macos
 
