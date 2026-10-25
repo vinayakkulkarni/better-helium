@@ -1,0 +1,35 @@
+# pnpm 11+ reads only auth/registry keys from .npmrc; every other setting
+# lives here in camelCase. The repo root stays pure bash: this file makes
+# site/ its own pnpm project.
+
+# Classic TypeScript 6 is held on purpose: vue-tsc 3.3.13 patches the JS
+# compiler, which the native TypeScript 7 does not ship.
+
+# Nuxt 4.5+ runs on unhead v3. Keep one copy on the release that fixed the
+# Cloudflare preset build break (nuxt/nuxt#35670).
+overrides:
+  unhead: '>=3.4.3'
+
+minimumReleaseAge: 60
+minimumReleaseAgeExclude:
+  - '@nuxt/*'
+  - nuxt
+  - '@vue/*'
+  - vue
+  - wrangler
+  - workerd
+  - miniflare
+  - '@cloudflare/*'
+  - '@oxlint/*'
+  - '@oxfmt/*'
+  - oxlint
+  - oxfmt
+  - '@types/*'
+
+allowBuilds:
+  '@parcel/watcher': false
+  esbuild: true
+  sharp: false
+  unrs-resolver: true
+  vue-demi: false
+  workerd: true

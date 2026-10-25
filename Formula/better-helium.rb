@@ -3,18 +3,18 @@
 
 # Homebrew formula for better-helium.
 #
-# Stable install (recommended — pinned to v1.0.0 tarball):
+# Install (pinned to the tagged tarball below). Homebrew does not install a
+# formula from a raw URL, and Homebrew 7 only loads formulae from trusted taps:
 #
-#   brew install https://raw.githubusercontent.com/vinayakkulkarni/better-helium/main/Formula/better-helium.rb
+#   brew tap vinayakkulkarni/better-helium https://github.com/vinayakkulkarni/better-helium
+#   brew trust vinayakkulkarni/better-helium
+#   brew install better-helium
 #
 # Bleeding-edge install (always tracks main branch):
 #
-#   brew install --HEAD https://raw.githubusercontent.com/vinayakkulkarni/better-helium/main/Formula/better-helium.rb
+#   brew install --HEAD better-helium
 #
-# Tap-based install (cleaner upgrades — `brew upgrade better-helium`):
-#
-#   brew tap vinayakkulkarni/better-helium https://github.com/vinayakkulkarni/better-helium
-#   brew install better-helium
+# Upgrade with `brew upgrade better-helium`.
 #
 # Once installed, the binary lives at $(brew --prefix)/bin/better-helium and is
 # reachable from any shell. Drop the .zshrc snippet from the project README
