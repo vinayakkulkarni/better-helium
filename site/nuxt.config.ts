@@ -5,7 +5,7 @@ const COMPATIBILITY_DATE = '2026-10-22';
 
 // GA4 measurement ID. Empty until the property exists: the GA4 plugin skips
 // itself when this is empty. Override per env with NUXT_PUBLIC_GTAG_ID.
-const GTAG_ID = '';
+const GTAG_ID = 'G-7S2898BMK0';
 
 export default defineNuxtConfig({
   compatibilityDate: COMPATIBILITY_DATE,
