@@ -2,21 +2,20 @@
 
 Give the [Helium browser](https://helium.computer) the DRM playback it ships without — Netflix, Hotstar, Disney+, Spotify, YouTube Premium DRM titles. One script. Idempotent. Re-run after every Helium update.
 
+**Website:** https://better-helium.vinayakkulkarni.dev
+
 ### Homebrew (recommended)
 
-One-shot install — no tap setup, just install from the formula URL:
-
-```sh
-brew install --HEAD https://raw.githubusercontent.com/vinayakkulkarni/better-helium/main/Formula/better-helium.rb
-better-helium
-```
-
-Or tap it for managed upgrades (`brew upgrade --fetch-HEAD better-helium`):
+Tap the repo, trust the tap, install:
 
 ```sh
 brew tap vinayakkulkarni/better-helium https://github.com/vinayakkulkarni/better-helium
-brew install --HEAD better-helium
+brew trust vinayakkulkarni/better-helium
+brew install better-helium
+better-helium
 ```
+
+Homebrew no longer installs a formula from a raw URL, and Homebrew 7 refuses to load formulae from a tap you have not trusted — `brew trust` is that step. Upgrade later with `brew upgrade better-helium`; track `main` instead with `brew install --HEAD better-helium`.
 
 After install, `better-helium` is on your PATH. The first patch downloads Google Chrome.dmg (~250 MB, cached); subsequent patches take ~30 seconds.
 
@@ -201,6 +200,17 @@ scripts/release.sh 1.1.0-beta.1           # marked as --prerelease automatically
 ```
 
 The script handles the full flow end-to-end: validates clean working tree + main branch + tag availability, bumps `VERSION` in the script, tags + pushes, retries the GitHub-generated tarball until ready, computes its sha256, updates the Homebrew formula's `url`/`sha256`/`version`, commits + pushes, and creates the GitHub release.
+
+## Website (maintainer notes)
+
+The marketing site lives in [`site/`](./site) as its own pnpm project (Nuxt on a Cloudflare Worker, `better-helium-site`); the tool itself stays pure bash. Node 26 and pnpm are needed only there:
+
+```sh
+cd site
+pnpm install
+pnpm run dev       # local
+pnpm run deploy    # build + wrangler deploy to better-helium.vinayakkulkarni.dev
+```
 
 ## Prior art
 
