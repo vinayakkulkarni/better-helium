@@ -2,7 +2,7 @@
 
 Give the [Helium browser](https://helium.computer) the DRM playback it ships without — Netflix, Hotstar, Disney+, Spotify, YouTube Premium DRM titles. One script. Idempotent. Re-run after every Helium update.
 
-**Website:** https://better-helium.vinayakkulkarni.dev
+**[Website](https://better-helium.vinayakkulkarni.dev/?utm_source=github&utm_medium=readme&utm_campaign=better-helium)**
 
 ### Homebrew (recommended)
 
@@ -217,6 +217,18 @@ pnpm run deploy    # build + wrangler deploy to better-helium.vinayakkulkarni.de
 - [vikas5914/helium-drm-fixer](https://github.com/vikas5914/helium-drm-fixer) — the original gist that documented the patch by hand.
 - [nicholasraimbault/neon](https://github.com/nicholasraimbault/neon) — a much more ambitious fork: multi-browser support, menu-bar app, LaunchDaemon for auto-patching on update, brew install. If you want all that, use Neon. `better-helium` is deliberately minimal: one script, Helium-only, no daemon, no UI.
 - [claudiodekker's Ungoogled-Chromium gist](https://gist.github.com/claudiodekker/4c9f40654106ff6717865d73cca7580e) — the Chrome.dmg extraction technique we use.
+
+---
+
+## More from the author
+
+- [mdr](https://mdr.geoql.in/?utm_source=github&utm_medium=readme&utm_campaign=better-helium) — persistent memory for AI coding agents
+- [the-doctor.report](https://the-doctor.report/?utm_source=github&utm_medium=readme&utm_campaign=better-helium) — Vue/Nuxt code health auditor
+- [shadscan-vue](https://shadscan-vue.geoql.in/?utm_source=github&utm_medium=readme&utm_campaign=better-helium) — shadcn-vue component and registry scanner
+- [nxui](https://nxui.geoql.in/?utm_source=github&utm_medium=readme&utm_campaign=better-helium) — Vue port of Paper Shaders and animated components
+- [tileserver-rs](https://tileserver.app/?utm_source=github&utm_medium=readme&utm_campaign=better-helium) — fast Rust tile server
+
+See every project at [vinayakkulkarni.dev/projects](https://vinayakkulkarni.dev/projects?utm_source=github&utm_medium=readme&utm_campaign=better-helium) and [geoql.in](https://geoql.in/?utm_source=github&utm_medium=readme&utm_campaign=better-helium).
 
 ---
 
